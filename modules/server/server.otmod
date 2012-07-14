@@ -1,0 +1,10 @@
+Module
+  name: server
+  description: Listen on login port
+
+  @onLoad: |
+    dofile 'server'
+    Server.init()
+
+  @onUnload: |
+    Server.terminate()

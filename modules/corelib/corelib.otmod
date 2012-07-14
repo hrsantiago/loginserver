@@ -1,0 +1,8 @@
+Module
+  name: corelib
+  description: Contains core lua classes, functions and constants used by other modules
+
+  @onLoad: |
+    dofile 'const'
+    dofile 'util'
+    dofile 'globals'
