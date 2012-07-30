@@ -4,7 +4,9 @@ Module
 
   @onLoad: |
     dofile 'server'
-    Server.init()
+    dofile 'protocolgeneric'
+    dofile 'protocollogin'
+    ServerManager.init()
 
   @onUnload: |
-    Server.terminate()
+    ServerManager.terminate()
