@@ -42,7 +42,7 @@ function ProtocolLogin:parseFirstMessage(msg)
   local sprSignature = msg:getU32()
   local picSignature = msg:getU32()
 
-  if not msg:decryptRsa(msg:getUnreadSize(), RSA_P, RSA_Q, RSA_D) then
+  if not msg:decryptRsa(msg:getUnreadSize(), OTSERV_RSA, RSA_P, RSA_Q, RSA_D) then
     self:disconnect()
     return
   end
@@ -66,9 +66,9 @@ function ProtocolLogin:parseFirstMessage(msg)
   end
 
   local database = ServerManager.getDatabase()
-  local accountResult = database:storeQuery('SELECT * FROM accounts WHERE name=\'' .. database:escapeString(accountName) .. '\'')
+  local accountResult = database:storeQuery('SELECT * FROM accounts WHERE name=' .. database:escapeString(accountName))
   if not accountResult then
-    sendError('Your account name or password is invalid.')
+    self:sendError('Your account name or password is invalid.')
     self:disconnect()
     return
   end
@@ -77,8 +77,8 @@ function ProtocolLogin:parseFirstMessage(msg)
   local plainPassword = accountResult:getDataString('salt') .. accountPassword
 
   -- encrypt plain with desired method and compare
-  if encrypt(plainPassword) ~= hashPassword then -- todo encrypt
-    sendError('Your account name or password is invalid.')
+  if g_crypt.sha1Encode(plainPassword, true) ~= hashPassword:upper() then -- todo encrypt
+    self:sendError('Your account name or password is invalid.')
     self:disconnect()
     return
   end
@@ -91,9 +91,9 @@ function ProtocolLogin:parseFirstMessage(msg)
 
   -- charlist -- todo: add cooler stuff, like outfit, level
   local accountId = accountResult:getDataInt('id')
-  local charListResult = database:storeQuery('SELECT `name`, `world_id` FROM `players` WHERE `account_id` = ' .. accountId  .. ' AND `deleted` = 0'
+  local charListResult = database:storeQuery('SELECT `name`, `world_id` FROM `players` WHERE `account_id` = ' .. accountId  .. ' AND `deleted` = 0')
   if not charListResult then -- todo: add a byte to show create character dialog
-    sendError('This account does not contain any character yet')
+    self:sendError('This account does not contain any character yet')
     self:disconnect()
     return
   end
