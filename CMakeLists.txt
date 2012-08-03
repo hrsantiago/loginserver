@@ -6,6 +6,7 @@ set(executable_SOURCES
 )
 
 set(FRAMEWORK_NET ON)
+set(FRAMEWORK_SQL ON)
 include(../otclient/src/framework/CMakeLists.txt)
 add_executable(loginserver ${framework_SOURCES} ${executable_SOURCES})
 target_link_libraries(loginserver ${framework_LIBRARIES})

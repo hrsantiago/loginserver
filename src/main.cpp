@@ -1,6 +1,7 @@
 #include <framework/core/application.h>
 #include <framework/core/resourcemanager.h>
 #include <framework/luaengine/luainterface.h>
+#include <framework/sql/mysql.h>
 
 int main(int argc, const char* argv[])
 {
