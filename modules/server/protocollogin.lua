@@ -13,9 +13,9 @@ function ProtocolLogin:sendError(error)
   self:send(msg)
 end
 
-function ProtocolLogin:addMotd(msg, motd)
+function ProtocolLogin:addMotd(msg, id, text)
   msg:addU8(LoginServerMotd)
-  msg:addString(motd)
+  msg:addString(id .. '\n' .. text)
 end
 
 function ProtocolLogin:addUpdateNeeded(msg)
@@ -87,13 +87,15 @@ function ProtocolLogin:parseFirstMessage(msg)
   -- check premdays
 
   local msg = OutputMessage.create()
-  self:addMotd(msg, 'Motd test') -- should be a global storage
+
+  local motd = ServerManager.getMotd()
+  self:addMotd(msg, motd.id, motd.text)
 
   -- charlist -- todo: add cooler stuff, like outfit, level
   local accountId = accountResult:getDataInt('id')
   local charListResult = database:storeQuery('SELECT `name`, `world_id` FROM `players` WHERE `account_id` = ' .. accountId  .. ' AND `deleted` = 0')
   if not charListResult then -- todo: add a byte to show create character dialog
-    self:sendError('This account does not contain any character yet')
+    self:sendError('This account does not contain any character yet.')
     self:disconnect()
     return
   end
@@ -103,12 +105,12 @@ function ProtocolLogin:parseFirstMessage(msg)
   while true do
     charList[i] = {}
     charList[i].name = charListResult:getDataString('name')
-    charList[i].worldName = 'abc'
-    charList[i].worldIp = 123
-    charList[i].worldPort = 7171
-
+    
     local worldId = charListResult:getDataInt('world_id')
-    -- get world name, ip, port
+    local world = ServerManager.getWorld(worldId)
+    charList[i].worldName = world.name
+    charList[i].worldIp = world.ip
+    charList[i].worldPort = world.port
 
     if not charListResult:next() then
       break

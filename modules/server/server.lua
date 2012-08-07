@@ -13,30 +13,51 @@ RSA_D = "46730330223584118622160180015036832148732986808519344675210555262940258
 local server
 local protocols
 local database
+local motd
+local worlds
+local endpoints
 
 function Server:onAccept(connection, errorMessage, errorValue)
-  server:acceptNext()
+  if self:isOpen() then
+    server:acceptNext()
+  end
 
-  protocol = ProtocolGeneric.create()
-  protocol:enableChecksum()
-  protocol:setConnection(connection)
-  protocol:recv()
+  if errorValue == 0 then
+    protocol = ProtocolGeneric.create()
+    protocol:enableChecksum()
+    protocol:setConnection(connection)
+    protocol:recv()
 
-  ServerManager.setProtocol(connection, protocol)
+    ServerManager.setProtocol(connection, protocol)
+  end
 end
 
 function ServerManager.init()
+  g_crypt.rsaSetPublicKey(OTSERV_RSA, '65537')
+  g_crypt.rsaSetPrivateKey(RSA_P, RSA_Q, RSA_D)
+  g_crypt.rsaCheckKey()
+
   database = DatabaseMySQL.create()
-  database:connect("189.55.105.125", "baxnie", "123456", "pserv", 3306)
+  database:connect("127.0.0.1", "root", "", "pserv", 3306)
+
+  protocols = {}
+  motd = {id=1, text='No current information.'}
+  worlds = {}
+  endpoints = {}
+
+  ServerManager.update()
 
   server = Server.create(7171)
   server:acceptNext()
-  protocols = {}
 end
 
 function ServerManager.terminate()
+  server:close()
   server = nil
   protocols = nil
+  motd = nil
+  worlds = nil
+  endpoints = nil
   database = nil
 end
 
@@ -46,4 +67,74 @@ end
 
 function ServerManager.getDatabase()
   return database
+end
+
+function ServerManager.update()
+  local motdResult = database:storeQuery('SELECT `id`, `text` FROM `server_motd` ORDER BY `id` DESC LIMIT 1')
+  if motdResult then
+    motd.id = motdResult:getDataString('id')
+    motd.text = motdResult:getDataString('text')
+  end
+
+  -- update worlds
+  local worldsResult = database:storeQuery('SELECT `id`, `name` FROM `worlds`')
+  if worldsResult then
+    worlds = { count=0 }
+    while true do
+      local id = worldsResult:getDataInt('id')
+      local name = worldsResult:getDataString('name')
+      worlds[id] = {}
+      worlds[id].name = name
+      worlds[id].endpoints = {count=0}
+      worlds.count = worlds.count + 1
+      if not worldsResult:next() then break end
+    end
+  end
+
+  -- update endpoints
+  local endpointsResult = database:storeQuery('SELECT `id`, `ip`, `netmask` FROM `endpoints`')
+  if endpointsResult then
+    local endpoint = {}
+    local id = endpointsResult:getDataInt('id')
+    endpoint.ip = stringtoip(endpointsResult:getDataString('ip'))
+    endpoint.netmask = endpointsResult:getDataInt('netmask')
+    endpoints[id] = endpoint
+  end
+
+  -- update worlds endpoints
+  local worldEndpointsResult = database:storeQuery('SELECT `world_id`, `endpoint_id`, `port` FROM `world_endpoints`')
+  if worldEndpointsResult then
+    local worldId = worldEndpointsResult:getDataInt('world_id')
+    local endpointId = worldEndpointsResult:getDataInt('endpoint_id')
+    local port = worldEndpointsResult:getDataInt('port')
+
+    local world = worlds[worldId]
+    world.endpoints[endpointId] = {port=port}
+    world.endpoints.count = world.endpoints.count + 1
+  end
+
+  scheduleEvent(ServerManager.update, 1000)
+end
+
+function ServerManager.getMotd()
+  return motd
+end
+
+function ServerManager.getWorld(id)
+  local world = {}
+  world.name = worlds[id].name
+
+  local worldEndpoints = worlds[id].endpoints
+  for key,value in ipairs(worldEndpoints) do
+    local endpoint = endpoints[key]
+    world.ip = endpoint.ip
+    -- todo: check netmask
+    world.port = value.port
+  end
+
+  return world
+end
+
+function ServerManager.getWorldCount()
+  return worlds.count
 end
