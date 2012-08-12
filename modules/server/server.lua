@@ -10,6 +10,15 @@ RSA_P = "14299623962416399520070177382898895550795403345466153217470516082934737
 RSA_Q = "7630979195970404721891201847792002125535401292779123937207447574596692788513647179235335529307251350570728407373705564708871762033017096809910315212884101"
 RSA_D = "46730330223584118622160180015036832148732986808519344675210555262940258739805766860224610646919605860206328024326703361630109888417839241959507572247284807035235569619173792292786907845791904955103601652822519121908367187885509270025388641700821735345222087940578381210879116823013776808975766851829020659073"
 
+OsTypes = {
+  Linux = 1,
+  Windows = 2,
+  Flash = 3,
+  OtclientLinux = 10,
+  OtclientWindows = 11,
+  OtclientMac = 12
+}
+
 local server
 local protocols
 local database
@@ -94,23 +103,35 @@ function ServerManager.update()
   -- update endpoints
   local endpointsResult = database:storeQuery('SELECT `id`, `ip`, `netmask` FROM `endpoints`')
   if endpointsResult then
-    local endpoint = {}
-    local id = endpointsResult:getDataInt('id')
-    endpoint.ip = stringtoip(endpointsResult:getDataString('ip'))
-    endpoint.netmask = endpointsResult:getDataInt('netmask')
-    endpoints[id] = endpoint
+    endpoints = {}
+    while true do
+      local endpoint = {}
+      endpoint.ip = stringtoip(endpointsResult:getDataString('ip'))
+      endpoint.netmask = endpointsResult:getDataInt('netmask')
+      endpoints[endpointsResult:getDataInt('id')] = endpoint
+      if not endpointsResult:next() then break end
+    end
   end
 
   -- update worlds endpoints
   local worldEndpointsResult = database:storeQuery('SELECT `world_id`, `endpoint_id`, `port` FROM `world_endpoints`')
   if worldEndpointsResult then
-    local worldId = worldEndpointsResult:getDataInt('world_id')
-    local endpointId = worldEndpointsResult:getDataInt('endpoint_id')
-    local port = worldEndpointsResult:getDataInt('port')
+    while true do
+      local worldId = worldEndpointsResult:getDataInt('world_id')
+      local endpointId = worldEndpointsResult:getDataInt('endpoint_id')
+      local port = worldEndpointsResult:getDataInt('port')
 
-    local world = worlds[worldId]
-    world.endpoints[endpointId] = {port=port}
-    world.endpoints.count = world.endpoints.count + 1
+      local endpoint = {}
+      endpoint.port = port
+      endpoint.ip = endpoints[endpointId].ip
+      endpoint.netmask = endpoints[endpointId].netmask
+
+      local world = worlds[worldId]
+      world.endpoints[world.endpoints.count+1] = endpoint
+      world.endpoints.count = world.endpoints.count + 1
+
+      if not worldEndpointsResult:next() then break end
+    end
   end
 
   scheduleEvent(ServerManager.update, 1000)
@@ -121,17 +142,15 @@ function ServerManager.getMotd()
 end
 
 function ServerManager.getWorld(id)
+  local endpointId = math.random(1, worlds[id].endpoints.count)
+  local endpoint = worlds[id].endpoints[endpointId]
+  local ipList = listSubnetAddresses(endpoint.ip, endpoint.netmask)
+  local ipId = math.random(1, #ipList)
+
   local world = {}
   world.name = worlds[id].name
-
-  local worldEndpoints = worlds[id].endpoints
-  for key,value in ipairs(worldEndpoints) do
-    local endpoint = endpoints[key]
-    world.ip = endpoint.ip
-    -- todo: check netmask
-    world.port = value.port
-  end
-
+  world.ip = ipList[ipId]
+  world.port = endpoint.port
   return world
 end
 

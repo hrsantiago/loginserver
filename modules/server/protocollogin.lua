@@ -5,6 +5,8 @@ LoginServerError = 10
 LoginServerMotd = 20
 LoginServerUpdateNeeded = 30
 LoginServerCharacterList = 100
+LoginServerCharacterListExtended = 101
+LoginServerCreateCharacter = 102
 
 function ProtocolLogin:sendError(error)
   local msg = OutputMessage.create()
@@ -34,6 +36,31 @@ function ProtocolLogin:addCharacterList(msg, charList, premDays)
   msg:addU16(premDays)
 end
 
+function ProtocolLogin:addCharacterListExtended(msg, charList, premDays)
+  msg:addU8(LoginServerCharacterListExtended)
+  msg:addU8(#charList)
+  for i=1,#charList do
+    msg:addString(charList[i].name)
+    msg:addString(charList[i].worldName)
+    msg:addU32(charList[i].worldIp)
+    msg:addU16(charList[i].worldPort)
+    msg:addU16(charList[i].level)
+    msg:addU8(charList[i].lookType)
+    msg:addU8(charList[i].lookHead)
+    msg:addU8(charList[i].lookBody)
+    msg:addU8(charList[i].lookLegs)
+    msg:addU8(charList[i].lookFeet)
+    msg:addU8(charList[i].lookAddons)
+  end
+  msg:addU16(premDays)
+end
+
+function ProtocolLogin:sendCreateCharacter()
+  local msg = OutputMessage.create()
+  msg:addU8(LoginServerCreateCharacter)
+  self:send(msg)
+end
+
 function ProtocolLogin:parseFirstMessage(msg)
   local osType = msg:getU16()
   local protocolVersion = msg:getU16()
@@ -58,68 +85,76 @@ function ProtocolLogin:parseFirstMessage(msg)
   self:setXteaKey(xteaKey1, xteaKey2, xteaKey3, xteaKey4)
   self:enableXteaEncryption()
 
-  -- todo: remember to check attempts from every ip
-  if string.len(accountName) <= 0 and string.len(accountPassword) <= 0 then
-    sendError('Your account name or password is invalid.')
-    self:disconnect()
-    return
-  end
-
+  -- check account
   local database = ServerManager.getDatabase()
   local accountResult = database:storeQuery('SELECT * FROM accounts WHERE name=' .. database:escapeString(accountName))
   if not accountResult then
+    -- todo: check attempts
     self:sendError('Your account name or password is invalid.')
     self:disconnect()
     return
   end
 
+  -- check password
   local hashPassword = accountResult:getDataString('password')
   local plainPassword = accountResult:getDataString('salt') .. accountPassword
-
-  -- encrypt plain with desired method and compare
-  if g_crypt.sha1Encode(plainPassword, true) ~= hashPassword:upper() then -- todo encrypt
+  if g_crypt.sha1Encode(plainPassword, true) ~= hashPassword:upper() then
+    -- todo: check attempts
     self:sendError('Your account name or password is invalid.')
     self:disconnect()
     return
   end
 
-  -- check bans
   -- check premdays
+  local time = os.time()
+  local lastDay = accountResult:getDataLong('lastday')
+  local premDays = math.floor(math.max(lastDay - time, 0) / 86400);
+
+  -- load characters
+  local accountId = accountResult:getDataInt('id')
+  local charListResult = database:storeQuery('SELECT `name`, `level`, `world_id`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons` FROM `players` WHERE `account_id` = ' .. accountId  .. ' AND `deleted` = 0')
+  if not charListResult then
+    self:sendCreateCharacter(msg)
+    self:disconnect()
+    return
+  end
 
   local msg = OutputMessage.create()
 
+  -- motd
   local motd = ServerManager.getMotd()
   self:addMotd(msg, motd.id, motd.text)
 
-  -- charlist -- todo: add cooler stuff, like outfit, level
-  local accountId = accountResult:getDataInt('id')
-  local charListResult = database:storeQuery('SELECT `name`, `world_id` FROM `players` WHERE `account_id` = ' .. accountId  .. ' AND `deleted` = 0')
-  if not charListResult then -- todo: add a byte to show create character dialog
-    self:sendError('This account does not contain any character yet.')
-    self:disconnect()
-    return
-  end
-
+  -- charlist
   local charList = {}
   local i = 1
   while true do
     charList[i] = {}
     charList[i].name = charListResult:getDataString('name')
+    charList[i].level = charListResult:getDataInt('level')
+    charList[i].lookType = charListResult:getDataInt('looktype')
+    charList[i].lookHead = charListResult:getDataInt('lookhead')
+    charList[i].lookBody = charListResult:getDataInt('lookbody')
+    charList[i].lookLegs = charListResult:getDataInt('looklegs')
+    charList[i].lookFeet = charListResult:getDataInt('lookfeet')
+    charList[i].lookAddons = charListResult:getDataInt('lookaddons')
     
-    local worldId = charListResult:getDataInt('world_id')
-    local world = ServerManager.getWorld(worldId)
+    local world = ServerManager.getWorld(charListResult:getDataInt('world_id'))
     charList[i].worldName = world.name
     charList[i].worldIp = world.ip
     charList[i].worldPort = world.port
 
-    if not charListResult:next() then
-      break
-    end
+    if not charListResult:next() then break end
     i = i + 1
   end
 
-  self:addCharacterList(msg, charList, 10) -- todo premdays
+  if osType >= OsTypes.OtclientLinux then
+    self:addCharacterListExtended(msg, charList, premDays)
+  else
+    self:addCharacterList(msg, charList, premDays)
+  end
 
   self:send(msg)
+  ServerManager.setProtocol(self:getConnection(), nil)
   self:disconnect()
 end
