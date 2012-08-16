@@ -62,6 +62,9 @@ function ProtocolLogin:sendCreateCharacter()
 end
 
 function ProtocolLogin:parseFirstMessage(msg)
+  local connection = self:getConnection()
+  local ip = connection:getIp()
+
   local osType = msg:getU16()
   local protocolVersion = msg:getU16()
 
@@ -85,11 +88,19 @@ function ProtocolLogin:parseFirstMessage(msg)
   self:setXteaKey(xteaKey1, xteaKey2, xteaKey3, xteaKey4)
   self:enableXteaEncryption()
 
+  -- check ip banishment for attemps
+  local banTime = ServerManager.isIpBanished(ip)
+  if banTime > 0 then
+    self:sendError('Your IP address is banished for ' .. math.ceil(banTime/60) .. ' minutes.')
+    self:disconnect()
+    return
+  end
+
   -- check account
   local database = ServerManager.getDatabase()
   local accountResult = database:storeQuery('SELECT * FROM accounts WHERE name=' .. database:escapeString(accountName))
   if not accountResult then
-    -- todo: check attempts
+    ServerManager.addAttempt(ip)
     self:sendError('Your account name or password is invalid.')
     self:disconnect()
     return
@@ -99,7 +110,7 @@ function ProtocolLogin:parseFirstMessage(msg)
   local hashPassword = accountResult:getDataString('password')
   local plainPassword = accountResult:getDataString('salt') .. accountPassword
   if g_crypt.sha1Encode(plainPassword, true) ~= hashPassword:upper() then
-    -- todo: check attempts
+    ServerManager.addAttempt(ip)
     self:sendError('Your account name or password is invalid.')
     self:disconnect()
     return
@@ -107,8 +118,8 @@ function ProtocolLogin:parseFirstMessage(msg)
 
   -- check premdays
   local time = os.time()
-  local lastDay = accountResult:getDataLong('lastday')
-  local premDays = math.floor(math.max(lastDay - time, 0) / 86400);
+  local premEnd = accountResult:getDataLong('premend')
+  local premDays = math.ceil(math.max(premEnd - time, 0) / 86400);
 
   -- load characters
   local accountId = accountResult:getDataInt('id')
@@ -148,13 +159,13 @@ function ProtocolLogin:parseFirstMessage(msg)
     i = i + 1
   end
 
-  if osType >= OsTypes.OtclientLinux then
+  if osType < OsTypes.OtclientLinux then
     self:addCharacterListExtended(msg, charList, premDays)
   else
     self:addCharacterList(msg, charList, premDays)
   end
 
   self:send(msg)
-  ServerManager.setProtocol(self:getConnection(), nil)
+  ServerManager.setProtocol(connection, nil)
   self:disconnect()
 end

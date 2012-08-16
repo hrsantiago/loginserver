@@ -1,5 +1,9 @@
 ServerManager = {}
 
+-- CONFIG
+local ATTEMPTS_BAN_TIME = 10*60 -- 10 minutes
+local ATTEMPTS_COUNT = 10
+
 OTSERV_RSA  = "1091201329673994292788609605089955415282375029027981291234687579" ..
               "3726629149257644633073969600111060390723088861007265581882535850" ..
               "3429057592827629436413108566029093628212635953836686562675849720" ..
@@ -18,6 +22,7 @@ OsTypes = {
   OtclientWindows = 11,
   OtclientMac = 12
 }
+-- END CONFIG
 
 local server
 local protocols
@@ -25,6 +30,7 @@ local database
 local motd
 local worlds
 local endpoints
+local attempts
 
 function Server:onAccept(connection, errorMessage, errorValue)
   if self:isOpen() then
@@ -53,6 +59,7 @@ function ServerManager.init()
   motd = {id=1, text='No current information.'}
   worlds = {}
   endpoints = {}
+  attempts = {}
 
   ServerManager.update()
 
@@ -156,4 +163,35 @@ end
 
 function ServerManager.getWorldCount()
   return worlds.count
+end
+
+function ServerManager.addAttempt(ip)
+  local attempt = {count=0,last=0}
+  if attempts[ip] then
+    attempt = attempts[ip]
+  end
+
+  attempt.count = attempt.count + 1
+  attempt.last = os.time()
+
+  attempts[ip] = attempt
+end
+
+function ServerManager.isIpBanished(ip)
+  local attempt = attempts[ip]
+  if not attempt then
+    return 0
+  end
+
+  local time = os.time()
+  if time - attempt.last >= ATTEMPTS_BAN_TIME then
+    attempt.count = 0
+    return 0
+  end
+
+  if attempt.count >= ATTEMPTS_COUNT then
+    return ATTEMPTS_BAN_TIME - (time - attempt.last)
+  end
+
+  return 0
 end
