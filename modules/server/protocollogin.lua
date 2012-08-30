@@ -24,7 +24,7 @@ function ProtocolLogin:addUpdateNeeded(msg)
   msg:addU8(LoginServerUpdateNeeded)
 end
 
-function ProtocolLogin:addCharacterList(msg, charList, premDays)
+function ProtocolLogin:addCharacterList(msg, charList, account)
   msg:addU8(LoginServerCharacterList)
   msg:addU8(#charList)
   for i=1,#charList do
@@ -33,26 +33,13 @@ function ProtocolLogin:addCharacterList(msg, charList, premDays)
     msg:addU32(charList[i].worldIp)
     msg:addU16(charList[i].worldPort)
   end
-  msg:addU16(premDays)
+  msg:addU16(account.premDays)
 end
 
-function ProtocolLogin:addCharacterListExtended(msg, charList, premDays)
+function ProtocolLogin:addCharacterListExtended(msg, charList, account)
   msg:addU8(LoginServerCharacterListExtended)
-  msg:addU8(#charList)
-  for i=1,#charList do
-    msg:addString(charList[i].name)
-    msg:addString(charList[i].worldName)
-    msg:addU32(charList[i].worldIp)
-    msg:addU16(charList[i].worldPort)
-    msg:addU16(charList[i].level)
-    msg:addU8(charList[i].lookType)
-    msg:addU8(charList[i].lookHead)
-    msg:addU8(charList[i].lookBody)
-    msg:addU8(charList[i].lookLegs)
-    msg:addU8(charList[i].lookFeet)
-    msg:addU8(charList[i].lookAddons)
-  end
-  msg:addU16(premDays)
+  msg:addTable(charList)
+  msg:addTable(account)
 end
 
 function ProtocolLogin:sendCreateCharacter()
@@ -138,17 +125,21 @@ function ProtocolLogin:parseFirstMessage(msg)
 
   -- charlist
   local charList = {}
+  charList.otui = ''
   local i = 1
   while true do
     charList[i] = {}
     charList[i].name = charListResult:getDataString('name')
     charList[i].level = charListResult:getDataInt('level')
-    charList[i].lookType = charListResult:getDataInt('looktype')
-    charList[i].lookHead = charListResult:getDataInt('lookhead')
-    charList[i].lookBody = charListResult:getDataInt('lookbody')
-    charList[i].lookLegs = charListResult:getDataInt('looklegs')
-    charList[i].lookFeet = charListResult:getDataInt('lookfeet')
-    charList[i].lookAddons = charListResult:getDataInt('lookaddons')
+
+    local outfit = {}
+    outfit.type = charListResult:getDataInt('looktype')
+    outfit.head = charListResult:getDataInt('lookhead')
+    outfit.body = charListResult:getDataInt('lookbody')
+    outfit.legs = charListResult:getDataInt('looklegs')
+    outfit.feet = charListResult:getDataInt('lookfeet')
+    outfit.addons = charListResult:getDataInt('lookaddons')
+    charList[i].outfit = outfit
     
     local world = ServerManager.getWorld(charListResult:getDataInt('world_id'))
     charList[i].worldName = world.name
@@ -159,10 +150,13 @@ function ProtocolLogin:parseFirstMessage(msg)
     i = i + 1
   end
 
-  if osType < OsTypes.OtclientLinux then
-    self:addCharacterListExtended(msg, charList, premDays)
+  local account = {}
+  account.premDays = premDays
+
+  if osType >= OsTypes.OtclientLinux then
+    self:addCharacterListExtended(msg, charList, account)
   else
-    self:addCharacterList(msg, charList, premDays)
+    self:addCharacterList(msg, charList, account)
   end
 
   self:send(msg)

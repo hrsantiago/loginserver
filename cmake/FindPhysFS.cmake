@@ -1,0 +1,10 @@
+# Try to find the physfs librairy
+#  PHYSFS_FOUND - system has physfs
+#  PHYSFS_INCLUDE_DIR - the physfs include directory
+#  PHYSFS_LIBRARY - the physfs library
+
+FIND_PATH(PHYSFS_INCLUDE_DIR physfs.h PATH_SUFFIXES physfs)
+FIND_LIBRARY(PHYSFS_LIBRARY NAMES libphysfs.a physfs)
+INCLUDE(FindPackageHandleStandardArgs)
+FIND_PACKAGE_HANDLE_STANDARD_ARGS(PhysFS DEFAULT_MSG PHYSFS_LIBRARY PHYSFS_INCLUDE_DIR)
+MARK_AS_ADVANCED(PHYSFS_LIBRARY PHYSFS_INCLUDE_DIR)

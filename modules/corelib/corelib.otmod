@@ -6,3 +6,5 @@ Module
     dofile 'const'
     dofile 'util'
     dofile 'globals'
+    dofile 'inputmessage'
+    dofile 'outputmessage'
