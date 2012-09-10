@@ -40,6 +40,7 @@ function ProtocolLogin:addCharacterListExtended(msg, charList, account)
   msg:addU8(LoginServerCharacterListExtended)
   msg:addTable(charList)
   msg:addTable(account)
+  msg:addString('pokecharlist.otui')
 end
 
 function ProtocolLogin:sendCreateCharacter()
@@ -130,7 +131,7 @@ function ProtocolLogin:parseFirstMessage(msg)
   while true do
     charList[i] = {}
     charList[i].name = charListResult:getDataString('name')
-    charList[i].level = charListResult:getDataInt('level')
+    charList[i].lvl = charListResult:getDataInt('level')
 
     local outfit = {}
     outfit.type = charListResult:getDataInt('looktype')

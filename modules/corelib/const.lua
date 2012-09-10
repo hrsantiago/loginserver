@@ -6,9 +6,13 @@ LogFatal = 4
 
 NetworkMessageTypes = {
   Boolean = 1,
-  Number = 2,
-  String = 3,
-  Table = 4
+  U8 = 2,
+  U16 = 3,
+  U32 = 4,
+  U64 = 5,
+  NumberString = 6,
+  String = 7,
+  Table = 8
 }
 
 OTSERV_RSA  = "1091201329673994292788609605089955415282375029027981291234687579" ..

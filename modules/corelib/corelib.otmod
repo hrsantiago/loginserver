@@ -6,5 +6,6 @@ Module
     dofile 'const'
     dofile 'util'
     dofile 'globals'
+    dofile 'math'
     dofile 'inputmessage'
     dofile 'outputmessage'

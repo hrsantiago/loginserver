@@ -1,6 +1,14 @@
 ServerManager = {}
 
 -- CONFIG
+local LISTEN_PORT = 7171
+
+local DATABASE_HOST = "127.0.0.1"
+local DATABASE_PORT = 3306
+local DATABASE_USER = "root"
+local DATABASE_PASS = ""
+local DATABASE_NAME = "pserv"
+
 local ATTEMPTS_BAN_TIME = 10*60 -- 10 minutes
 local ATTEMPTS_COUNT = 10
 
@@ -33,7 +41,7 @@ function ServerManager.init()
   g_crypt.rsaCheckKey()
 
   database = DatabaseMySQL.create()
-  database:connect("127.0.0.1", "root", "", "pserv", 3306)
+  database:connect(DATABASE_HOST, DATABASE_USER, DATABASE_PASS, DATABASE_NAME, DATABASE_PORT)
 
   protocols = {}
   motd = {id=1, text='No current information.'}
@@ -43,7 +51,7 @@ function ServerManager.init()
 
   ServerManager.update()
 
-  server = Server.create(7171)
+  server = Server.create(LISTEN_PORT)
   server:acceptNext()
 end
 
