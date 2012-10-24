@@ -52,12 +52,18 @@ function ServerManager.init()
   ServerManager.update()
 
   server = Server.create(LISTEN_PORT)
-  server:acceptNext()
+  if server then
+    server:acceptNext()
+  else
+    g_app.exit()
+  end
 end
 
 function ServerManager.terminate()
-  server:close()
-  server = nil
+  if server then
+    server:close()
+    server = nil
+  end
   protocols = nil
   motd = nil
   worlds = nil
