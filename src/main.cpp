@@ -17,7 +17,7 @@ int main(int argc, const char* argv[])
 
     // find script init.lua and run it
     g_resources.discoverWorkDir("init.lua");
-    if(!g_lua.safeRunScript(g_resources.getWorkDir() + "init.lua"))
+    if(!g_lua.safeRunScript("init.lua"))
         g_logger.fatal("Unable to run script init.lua!");
 
     // the run application main loop
