@@ -1,6 +1,11 @@
 -- @docclass
 ProtocolLogin = extends(Protocol)
 
+function ProtocolLogin:disconnect()
+  ServerManager.setProtocol(self:getConnection(), nil)
+  Protocol.disconnect(self)
+end
+
 function ProtocolLogin:sendError(error)
   local msg = OutputMessage.create()
   msg:addU8(20)

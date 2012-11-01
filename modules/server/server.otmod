@@ -3,6 +3,7 @@ Module
   description: Listen on login port
 
   @onLoad: |
+    dofile 'account'
     dofile 'server'
     dofile 'protocolgeneric'
     dofile 'protocollogin'

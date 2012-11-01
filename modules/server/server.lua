@@ -135,6 +135,9 @@ function ServerManager.update()
     end
   end
 
+  -- cleanup
+  collectgarbage()
+
   scheduleEvent(ServerManager.update, 1000)
 end
 
@@ -153,6 +156,15 @@ function ServerManager.getWorld(id)
   world.ip = ipList[ipId]
   world.port = endpoint.port
   return world
+end
+
+function ServerManager.getWorldId(name)
+  for id, world in pairs(worlds) do
+    if type(world) == 'table' and world.name == name then
+      return id
+    end
+  end
+  return false
 end
 
 function ServerManager.getWorldCount()
@@ -188,4 +200,13 @@ function ServerManager.isIpBanished(ip)
   end
 
   return 0
+end
+
+function ServerManager.isCharacterNameAvailable(name)
+  local data = database:storeQuery('SELECT COUNT(name) FROM `players` WHERE `name` = ' .. database:escapeString(name))
+  if data then
+    return (data:getDataInt('COUNT(name)') == 0)
+  else
+    return true
+  end
 end

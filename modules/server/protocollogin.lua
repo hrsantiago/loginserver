@@ -8,6 +8,11 @@ LoginServerCharacterList = 100
 LoginServerCharacterListExtended = 101
 LoginServerCreateCharacter = 102
 
+function ProtocolLogin:disconnect()
+  ServerManager.setProtocol(self:getConnection(), nil)
+  Protocol.disconnect(self)
+end
+
 function ProtocolLogin:sendError(error)
   local msg = OutputMessage.create()
   msg:addU8(LoginServerError)
@@ -43,13 +48,15 @@ function ProtocolLogin:addCharacterListExtended(msg, charList, account)
   msg:addString('pokecharlist.otui')
 end
 
-function ProtocolLogin:sendCreateCharacter()
+function ProtocolLogin:sendCreateCharacter(message)
   local msg = OutputMessage.create()
   msg:addU8(LoginServerCreateCharacter)
+  msg:addString(message)
+  msg:addString('pokecharcreate.otui')
   self:send(msg)
 end
 
-function ProtocolLogin:parseFirstMessage(msg)
+function ProtocolLogin:parseLoginMessage(msg)
   local connection = self:getConnection()
   local ip = connection:getIp()
 
@@ -85,82 +92,134 @@ function ProtocolLogin:parseFirstMessage(msg)
   end
 
   -- check account
-  local database = ServerManager.getDatabase()
-  local accountResult = database:storeQuery('SELECT * FROM accounts WHERE name=' .. database:escapeString(accountName))
-  if not accountResult then
+  local account = Account.create(accountName, accountPassword)
+  if not account then
     ServerManager.addAttempt(ip)
     self:sendError('Your account name or password is invalid.')
     self:disconnect()
     return
   end
 
-  -- check password
-  local hashPassword = accountResult:getDataString('password')
-  local plainPassword = accountResult:getDataString('salt') .. accountPassword
-  if g_crypt.sha1Encode(plainPassword, true) ~= hashPassword:upper() then
-    ServerManager.addAttempt(ip)
-    self:sendError('Your account name or password is invalid.')
-    self:disconnect()
-    return
-  end
-
-  -- check premdays
-  local time = os.time()
-  local premEnd = accountResult:getDataLong('premend')
-  local premDays = math.ceil(math.max(premEnd - time, 0) / 86400);
-
-  -- load characters
-  local accountId = accountResult:getDataInt('id')
-  local charListResult = database:storeQuery('SELECT `name`, `level`, `world_id`, `lookbody`, `lookfeet`, `lookhead`, `looklegs`, `looktype`, `lookaddons` FROM `players` WHERE `account_id` = ' .. accountId  .. ' AND `deleted` = 0')
-  if not charListResult then
-    self:sendCreateCharacter(msg)
-    self:disconnect()
-    return
-  end
-
-  local msg = OutputMessage.create()
-
-  -- motd
+  -- load send stuff
   local motd = ServerManager.getMotd()
-  self:addMotd(msg, motd.id, motd.text)
-
-  -- charlist
-  local charList = {}
-  charList.otui = ''
-  local i = 1
-  while true do
-    charList[i] = {}
-    charList[i].name = charListResult:getDataString('name')
-    charList[i].lvl = charListResult:getDataInt('level')
-
-    local outfit = {}
-    outfit.type = charListResult:getDataInt('looktype')
-    outfit.head = charListResult:getDataInt('lookhead')
-    outfit.body = charListResult:getDataInt('lookbody')
-    outfit.legs = charListResult:getDataInt('looklegs')
-    outfit.feet = charListResult:getDataInt('lookfeet')
-    outfit.addons = charListResult:getDataInt('lookaddons')
-    charList[i].outfit = outfit
-    
-    local world = ServerManager.getWorld(charListResult:getDataInt('world_id'))
-    charList[i].worldName = world.name
-    charList[i].worldIp = world.ip
-    charList[i].worldPort = world.port
-
-    if not charListResult:next() then break end
-    i = i + 1
+  local accountTable = {premDays = account:getPremiumDays()}
+  local characterTable = account:getCharacterList()
+  if not characterTable then
+    self:sendCreateCharacter('Your account does not contain any character.')
+    self:disconnect()
+    return
   end
 
-  local account = {}
-  account.premDays = premDays
+  -- send
+  local oMsg = OutputMessage.create()
+  self:addMotd(oMsg, motd.id, motd.text)
 
   if osType >= OsTypes.OtclientLinux then
-    self:addCharacterListExtended(msg, charList, account)
+    self:addCharacterListExtended(oMsg, characterTable, accountTable)
   else
-    self:addCharacterList(msg, charList, account)
+    self:addCharacterList(oMsg, characterTable, accountTable)
   end
 
-  self:send(msg)
-  ServerManager.setProtocol(connection, nil)
+  self:send(oMsg)
+  self:disconnect()
+end
+
+function ProtocolLogin:parseCreateCharacterMessage(msg)
+  local connection = self:getConnection()
+  local ip = connection:getIp()
+
+  local osType = msg:getU16()
+  local protocolVersion = msg:getU16()
+
+  if not msg:decryptRsa(msg:getUnreadSize(), OTSERV_RSA, RSA_P, RSA_Q, RSA_D) then
+    self:disconnect()
+    return
+  end
+
+  local xteaKey1 = msg:getU32()
+  local xteaKey2 = msg:getU32()
+  local xteaKey3 = msg:getU32()
+  local xteaKey4 = msg:getU32()
+
+  local accountName = msg:getString()
+  local accountPassword = msg:getString()
+  local characterName = msg:getString()
+  local characterGender = msg:getU8()
+  local worldName = msg:getString()
+
+  self:setXteaKey(xteaKey1, xteaKey2, xteaKey3, xteaKey4)
+  self:enableXteaEncryption()
+
+  -- check ip banishment for attemps
+  local banTime = ServerManager.isIpBanished(ip)
+  if banTime > 0 then
+    self:sendError('Your IP address is banished for ' .. math.ceil(banTime/60) .. ' minutes.')
+    self:disconnect()
+    return
+  end
+
+  if string.len(characterName) < 3 then
+    self:sendError('Your character name is too small.')
+    self:disconnect()
+    return
+  end
+
+  if string.len(characterName) > 30 then
+    self:sendError('Your character name is too long.')
+    self:disconnect()
+    return
+  end
+
+  if characterGender ~= 0 and characterGender ~= 1 then
+    self:sendError('Your character gender is invalid.')
+    self:disconnect()
+    return
+  end
+
+  local worldId = ServerManager.getWorldId(worldName)
+  if not worldId then
+    self:sendError('World name is invalid.')
+    self:disconnect()
+    return
+  end
+
+  local account = Account.create(accountName, accountPassword)
+  if not account then
+    ServerManager.addAttempt(ip)
+    self:sendError('Your account name or password is invalid.')
+    self:disconnect()
+    return
+  end
+
+  if account:getCharacterCount() >= 10 then
+    self:sendError('Your account has too many characters.')
+    self:disconnect()
+    return
+  end
+
+  if not ServerManager.isCharacterNameAvailable(characterName) then
+    self:sendError('A character with this name already exists.')
+    self:disconnect()
+    return
+  end
+
+  if not account:createCharacter(characterName, characterGender, worldId) then
+    self:sendError('Could not create character. Please try again later.')
+    self:disconnect()
+    return
+  end
+
+  -- send
+  local accountTable = {premDays = account:getPremiumDays()}
+  local characterTable = account:getCharacterList()
+
+  local oMsg = OutputMessage.create()
+  if osType >= OsTypes.OtclientLinux then
+    self:addCharacterListExtended(oMsg, characterTable, accountTable)
+  else
+    self:addCharacterList(oMsg, characterTable, accountTable)
+  end
+
+  self:send(oMsg)
   self:disconnect()
 end
