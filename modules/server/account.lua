@@ -24,6 +24,9 @@ function Account.create(name, password)
 end
 
 function Account:getPremiumDays()
+  if self.premiumEnd == 1 then
+    return 65535
+  end
   return math.ceil(math.max(self.premiumEnd - os.time(), 0) / 86400);
 end
 

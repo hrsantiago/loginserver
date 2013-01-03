@@ -42,6 +42,9 @@ function ProtocolLogin:addCharacterList(msg, charList, account)
 end
 
 function ProtocolLogin:addCharacterListExtended(msg, charList, account)
+  for i=1,#charList do
+    charList[i].worldIp = iptostring(charList[i].worldIp)
+  end
   msg:addU8(LoginServerCharacterListExtended)
   msg:addTable(charList)
   msg:addTable(account)
