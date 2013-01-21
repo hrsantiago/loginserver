@@ -172,3 +172,14 @@ end
 function tr(s)
   return s
 end
+
+function hasInvalidCharacter(str, chars)
+  chars = chars or " -.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+  local strLen = string.len(str)
+  for i=1,strLen do
+    if not string.find(chars, string.char(string.byte(str, i))) then
+      return true
+    end
+  end
+  return false
+end

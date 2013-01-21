@@ -173,6 +173,12 @@ function ProtocolLogin:parseCreateCharacterMessage(msg)
     return
   end
 
+  if hasInvalidCharacter(characterName) then
+    self:sendError('Your character name contains invalid characters.')
+    self:disconnect()
+    return
+  end
+
   if characterGender ~= 0 and characterGender ~= 1 then
     self:sendError('Your character gender is invalid.')
     self:disconnect()

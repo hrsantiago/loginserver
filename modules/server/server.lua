@@ -3,7 +3,7 @@ ServerManager = {}
 -- CONFIG
 local LISTEN_PORT = 7171
 
-local DATABASE_HOST = "127.0.0.1"
+local DATABASE_HOST = "localhost"
 local DATABASE_PORT = 3306
 local DATABASE_USER = "root"
 local DATABASE_PASS = ""
