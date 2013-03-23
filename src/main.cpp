@@ -1,7 +1,9 @@
 #include <framework/core/application.h>
 #include <framework/core/resourcemanager.h>
 #include <framework/luaengine/luainterface.h>
+#ifdef FW_SQL
 #include <framework/sql/mysql.h>
+#endif
 
 int main(int argc, const char* argv[])
 {
